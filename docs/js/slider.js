@@ -22,7 +22,7 @@ const slider = (function(){
 			min: 0, // первый слайд
 			max: elements.length - 1 // последний слайд	
 		},
-		intervalSpeed: 2000, // Скорость смены слайдов в авторежиме
+		intervalSpeed: 1500, // Скорость смены слайдов в авторежиме
 
 		update: function(value) {
 			this.position.current = value;
@@ -31,43 +31,44 @@ const slider = (function(){
 		reset: function() {
 			this.position.current = 0;
 			this.offset = 0;
-		}	
+		}
 	};
 
 	const controlsInfo = {
 		buttonsEnabled: false,
 		dotsEnabled: false,
 		prevButtonDisabled: true,
-		nextButtonDisabled: false
+		nextButtonDisabled: false,
+		autoMode: false
 	};
 
 	// Инициализация слайдера
 	function init(props) {
-		// let {buttonsEnabled, dotsEnabled} = controlsInfo;
-		let {intervalSpeed, position, offset} = itemsInfo;
-		
 		// Проверка наличия элементов разметки
 		if (slider && sliderContent && sliderWrapper && elements) {
 			// Проверка входных параметров
-			if (props && props.intervalSpeed) {
-				intervalSpeed = props.intervalSpeed;
-			}
-			if (props && props.currentItem) {
-				if ( parseInt(props.currentItem) >= position.min && parseInt(props.currentItem) <= position.max ) {
-					position.current = props.currentItem;
-					offset = - props.currentItem;	
+			if (props) {
+				if (props.currentItem) {
+					if (parseInt(props.currentItem) >= itemsInfo.position.min && parseInt(props.currentItem) <= itemsInfo.position.max) {
+						itemsInfo.position.current = props.currentItem;
+						itemsInfo.offset = - props.currentItem;	
+					}
 				}
-			}
-			if (props && props.buttons) {
-				controlsInfo.buttonsEnabled = true;
-			}
-			if (props && props.dots) {
-				controlsInfo.dotsEnabled = true;
+				
+				if (props.intervalSpeed) itemsInfo.intervalSpeed = props.intervalSpeed;
+				if (props.buttons) controlsInfo.buttonsEnabled = true;
+				if (props.dots)	controlsInfo.dotsEnabled = true;	
+				if (props.autoMode)	controlsInfo.autoMode = true;	
 			}
 			
-			_updateControlsInfo();
 			_createControls(controlsInfo.dotsEnabled, controlsInfo.buttonsEnabled);
-			_render();	
+			_render();		
+			_updateControlsInfo();
+
+			// Авторежим
+			if (controlsInfo.autoMode) {
+				_startAutoMode()
+			}
 		} else {
 			console.log("Разметка слайдера задана неверно. Проверьте наличие всех необходимых классов 'slider/slider-content/slider-wrapper/slider-content__item'");
 		}
@@ -75,9 +76,9 @@ const slider = (function(){
 
 	// Обновить свойства контролов
 	function _updateControlsInfo() {
-		const {current, min, max} = itemsInfo.position;
-		controlsInfo.prevButtonDisabled = current > min ? false : true;
-		controlsInfo.nextButtonDisabled = current < max ? false : true;
+		const { current, min, max } = itemsInfo.position;
+		controlsInfo.prevButtonDisabled = current <= min;
+		controlsInfo.nextButtonDisabled = current >= max;
 	}
 
 	// Создание элементов разметки
@@ -100,11 +101,11 @@ const slider = (function(){
 			
 			leftArrow = createHTMLElement("div", "prev-arrow");
 			leftArrow.append(leftArrowSVG);
-			leftArrow.addEventListener("click", () => updateItemsInfo(itemsInfo.position.current - 1))
+			leftArrow.addEventListener("click", () => updateSliderPosition(itemsInfo.position.current - 1))
 			
 			rightArrow = createHTMLElement("div", "next-arrow");
 			rightArrow.append(rightArrowSVG);
-			rightArrow.addEventListener("click", () => updateItemsInfo(itemsInfo.position.current + 1))
+			rightArrow.addEventListener("click", () => updateSliderPosition(itemsInfo.position.current + 1))
 
 			sliderContentControls.append(leftArrow, rightArrow);
 			
@@ -127,7 +128,7 @@ const slider = (function(){
 				const dot = document.createElement("div");
 				dot.className = "dot";
 				dot.addEventListener("click", function() {
-					updateItemsInfo(i);
+					updateSliderPosition(i);
 				})
 				dotsWrapper.append(dot);		
 			}
@@ -138,32 +139,44 @@ const slider = (function(){
 		function createButtons() {
 			const controlsWrapper = createHTMLElement("div", "slider-controls");
 			prevButton = createHTMLElement("button", "prev-control", "Prev");
-			prevButton.addEventListener("click", () => updateItemsInfo(itemsInfo.position.current - 1))
+			prevButton.addEventListener("click", () => updateSliderPosition(itemsInfo.position.current - 1))
 			
 			autoButton = createHTMLElement("button", "auto-control", "Auto");
-			autoButton.addEventListener("click", () => {
-				intervalId = setInterval(function(){
-					if (itemsInfo.position.current < itemsInfo.position.max) {
-						itemsInfo.update(itemsInfo.position.current + 1);
-					} else {
-						itemsInfo.reset();
-					}
-					_slideItem();
-				}, itemsInfo.intervalSpeed)
-			})
+			autoButton.addEventListener("click", () => intervalId ? _stopAutoMode() : _startAutoMode())
 
 			nextButton = createHTMLElement("button", "next-control", "Next");
-			nextButton.addEventListener("click", () => updateItemsInfo(itemsInfo.position.current + 1))
+			nextButton.addEventListener("click", () => updateSliderPosition(itemsInfo.position.current + 1))
 
 			controlsWrapper.append(prevButton, autoButton, nextButton);
 			slider.append(controlsWrapper);
 		}
 	}
 
+	// выключить Авторежим
+	function _stopAutoMode () {
+		clearInterval(intervalId)
+		intervalId = null
+		if (autoButton) autoButton.textContent = 'Auto'
+	}
+
+	// включить Авторежим
+	function _startAutoMode () {
+		if (autoButton) autoButton.textContent = 'Stop'
+		controlsInfo.autoMode = true	
+		intervalId = setInterval(function(){
+			if (itemsInfo.position.current < itemsInfo.position.max) {
+				itemsInfo.update(itemsInfo.position.current + 1);
+			} else {
+				itemsInfo.reset();
+			}
+			_slideItem();
+		}, itemsInfo.intervalSpeed)
+	}
+
 	// Задать класс для контролов (buttons, arrows)
 	function setClass(options) {
 		if (options) {
-			options.forEach(({element, className, disabled}) => {
+			options.forEach(({ element, className, disabled }) => {
 				if (element) {
 					disabled ? element.classList.add(className) : element.classList.remove(className)	
 				} else {
@@ -173,24 +186,25 @@ const slider = (function(){
 		}
 	}
 
-	// Обновить значения слайдера
-	function updateItemsInfo(value) {
+	// Обновить значения слайдера вручную(при этом выключаем авторщежим, если включен) 
+	function updateSliderPosition(value) {
 		itemsInfo.update(value);
-		_slideItem(true);	
+		controlsInfo.autoMode = false
+		_slideItem();	
 	}
 
 	// Отобразить элементы
 	function _render() {
-		const {prevButtonDisabled, nextButtonDisabled} = controlsInfo;
+		const { prevButtonDisabled, nextButtonDisabled } = controlsInfo;
 		let controlsArray = [
-			{element: leftArrow, className: "d-none", disabled: prevButtonDisabled},
-			{element: rightArrow, className: "d-none", disabled: nextButtonDisabled}
+			{ element: leftArrow, className: "d-none", disabled: prevButtonDisabled },
+			{ element: rightArrow, className: "d-none", disabled: nextButtonDisabled }
 		];
 		if (controlsInfo.buttonsEnabled) {
 			controlsArray = [
 				...controlsArray, 
-				{element:prevButton, className: "disabled", disabled: prevButtonDisabled},
-				{element:nextButton, className: "disabled", disabled: nextButtonDisabled}
+				{ element: prevButton, className: "disabled", disabled: prevButtonDisabled },
+				{ element: nextButton, className: "disabled", disabled: nextButtonDisabled }
 			];
 		}
 		
@@ -198,7 +212,7 @@ const slider = (function(){
 		setClass(controlsArray);
 
 		// Передвигаем слайдер
-		sliderWrapper.style.transform = `translateX(${itemsInfo.offset*100}%)`;	
+		sliderWrapper.style.transform = `translateX(${itemsInfo.offset * 100}%)`;	
 		
 		// Задаем активный элемент для точек (dot)
 		if (controlsInfo.dotsEnabled) {
@@ -210,9 +224,9 @@ const slider = (function(){
 	}
 
 	// Переместить слайд
-	function _slideItem(autoMode = false) {
-		if (autoMode && intervalId) {
-			clearInterval(intervalId);
+	function _slideItem() {
+		if (!controlsInfo.autoMode && intervalId) {
+			_stopAutoMode()
 		}
 		_updateControlsInfo();
 		_render();
@@ -221,18 +235,19 @@ const slider = (function(){
 	// Создать HTML разметку для элемента
 	function createHTMLElement(tagName="div", className, innerHTML) {
 		const element = document.createElement(tagName);
-		className ? element.className = className : null;
-		innerHTML ? element.innerHTML = innerHTML : null;
+		element.className = className || null;
+		element.innerHTML = innerHTML || null;
 		return element;
 	}
 
 	// Доступные методы
-	return {init};
+	return { init };
 }())
 
 slider.init({
-	// intervalSpeed: 1000,
-	currentItem: 0,
+	// intervalSpeed: 500,
+	// currentItem: 2,
 	buttons: true,
-	dots: true
+	dots: true,
+	autoMode: true
 });
