@@ -213,6 +213,7 @@ const slider = (function(){
 
 		// Передвигаем слайдер
 		sliderWrapper.style.transform = `translateX(${itemsInfo.offset * 100}%)`;	
+		// sliderWrapper.style.transform = `translateX(-50%)`;	
 		
 		// Задаем активный элемент для точек (dot)
 		if (controlsInfo.dotsEnabled) {
